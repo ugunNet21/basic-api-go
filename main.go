@@ -1,0 +1,119 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"log"
+	"net/http"
+
+	"github.com/go-chi/chi"
+	_ "github.com/go-sql-driver/mysql"
+)
+
+// Book struct represents the structure of the 'tb_buku' table
+type Book struct {
+	ID        int    `json:"id"`
+	NameBooks string `json:"name_books"`
+	Title     string `json:"tittle"`
+}
+
+// Database handler
+type Database struct {
+	MySQLDB *sql.DB
+}
+
+// Open MySQL database connection
+func openMySQLConnection() (*sql.DB, error) {
+	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:3306)/books_go")
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+// Initialize database connection
+func initDB() *Database {
+	db, err := openMySQLConnection()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return &Database{
+		MySQLDB: db,
+	}
+}
+
+// Close database connection
+func (db *Database) close() {
+	db.MySQLDB.Close()
+}
+
+// API handler to get all books
+func handleGetBooks(db *Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rows, err := db.MySQLDB.Query("SELECT id, name_books, tittle FROM tb_buku")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var books []Book
+		for rows.Next() {
+			var book Book
+			err := rows.Scan(&book.ID, &book.NameBooks, &book.Title)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			books = append(books, book)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(books)
+	}
+}
+
+func main() {
+	db := initDB()
+	defer db.close()
+
+	r := chi.NewRouter()
+
+	// Define API route to get all books
+	r.Get("/books", handleGetBooks(db))
+
+	port := ":8080"
+	log.Printf("Starting server on %s...\n", port)
+	http.ListenAndServe(port, r)
+}
+
+// package main
+
+// import (
+// 	"database/sql"
+// 	"log"
+// 	"net/http"
+
+// 	"./repository"
+// 	"./router"
+// )
+
+// func main() {
+// 	// Open MySQL database connection
+// 	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:3306)/books_go")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer db.Close()
+
+// 	// Initialize database connection
+// 	dbInstance := repository.NewDatabase(db)
+// 	defer dbInstance.Close()
+
+// 	// Initialize router with database connection
+// 	r := router.NewRouter(dbInstance)
+
+// 	port := ":8080"
+// 	log.Printf("Starting server on %s...\n", port)
+// 	http.ListenAndServe(port, r)
+// }
